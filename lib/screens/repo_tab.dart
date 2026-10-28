@@ -12,6 +12,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:mornye/l10n/l10n.dart';
 import 'package:mornye/providers/repo_provider.dart';
+import 'package:mornye/providers/extension_provider.dart';
 import 'package:mornye/widgets/settings_group.dart';
 import 'package:mornye/widgets/animation_utils.dart';
 import 'package:mornye/screens/repo/extension_details_screen.dart';
@@ -27,6 +28,7 @@ import 'package:mornye/widgets/app_choice_chip.dart';
 import 'package:mornye/widgets/expressive_button.dart';
 import 'package:mornye/widgets/app_icon_button.dart';
 import 'package:mornye/widgets/app_loading_indicator.dart';
+import 'package:mornye/widgets/app_switch.dart';
 
 class RepoTab extends ConsumerStatefulWidget {
   const RepoTab({super.key});
@@ -38,6 +40,7 @@ class RepoTab extends ConsumerStatefulWidget {
 class _RepoTabState extends ConsumerState<RepoTab> {
   final _searchController = TextEditingController();
   final _repoUrlController = TextEditingController();
+  final _busyExtensionIds = <String>{};
   bool _isInitialized = false;
 
   @override
@@ -72,6 +75,12 @@ class _RepoTabState extends ConsumerState<RepoTab> {
       ),
     );
     final extensions = storeFilterState.$1;
+    final installedExtensions = ref.watch(
+      extensionProvider.select((state) => state.extensions),
+    );
+    final installedById = {
+      for (final extension in installedExtensions) extension.id: extension,
+    };
     final selectedCategory = storeFilterState.$2;
     final searchQuery = storeFilterState.$3;
     final isLoading = ref.watch(repoProvider.select((s) => s.isLoading));
@@ -238,6 +247,7 @@ class _RepoTabState extends ConsumerState<RepoTab> {
                     columns: desktopColumns,
                     edge: edge,
                     downloadingId: downloadingId,
+                    installedById: installedById,
                   )
                 else if (context.isMornye)
                   SliverToBoxAdapter(
@@ -255,10 +265,17 @@ class _RepoTabState extends ConsumerState<RepoTab> {
                           final ext = entry.value;
                           return _ExtensionItem(
                             extension: ext,
+                            isInstalled: installedById.containsKey(ext.id),
+                            isEnabled: installedById[ext.id]?.enabled ?? false,
+                            showToggle: isDesktopPlatform,
                             showDivider: index < filteredExtensions.length - 1,
-                            isDownloading: downloadingId == ext.id,
+                            isDownloading:
+                                downloadingId == ext.id ||
+                                _busyExtensionIds.contains(ext.id),
                             onInstall: () => _installExtension(ext),
                             onUpdate: () => _updateExtension(ext),
+                            onToggle: (enabled) =>
+                                _toggleExtension(ext, enabled),
                             onTap: () => _showExtensionDetails(ext),
                           );
                         }).toList(),
@@ -274,10 +291,17 @@ class _RepoTabState extends ConsumerState<RepoTab> {
                         final ext = entry.value;
                         return _ExtensionItem(
                           extension: ext,
+                          isInstalled: installedById.containsKey(ext.id),
+                          isEnabled: installedById[ext.id]?.enabled ?? false,
+                          showToggle: isDesktopPlatform,
                           showDivider: index < filteredExtensions.length - 1,
-                          isDownloading: downloadingId == ext.id,
+                          isDownloading:
+                              downloadingId == ext.id ||
+                              _busyExtensionIds.contains(ext.id),
                           onInstall: () => _installExtension(ext),
                           onUpdate: () => _updateExtension(ext),
+                          onToggle: (enabled) =>
+                              _toggleExtension(ext, enabled),
                           onTap: () => _showExtensionDetails(ext),
                         );
                       }).toList(),
@@ -307,14 +331,20 @@ class _RepoTabState extends ConsumerState<RepoTab> {
     required int columns,
     required double edge,
     required String? downloadingId,
+    required Map<String, Extension> installedById,
   }) {
     Widget tile(RepoExtension ext) {
       final item = _ExtensionItem(
         extension: ext,
+        isInstalled: installedById.containsKey(ext.id),
+        isEnabled: installedById[ext.id]?.enabled ?? false,
+        showToggle: isDesktopPlatform,
         showDivider: false,
-        isDownloading: downloadingId == ext.id,
+        isDownloading:
+            downloadingId == ext.id || _busyExtensionIds.contains(ext.id),
         onInstall: () => _installExtension(ext),
         onUpdate: () => _updateExtension(ext),
+        onToggle: (enabled) => _toggleExtension(ext, enabled),
         onTap: () => _showExtensionDetails(ext),
       );
       return context.isMornye
@@ -679,6 +709,69 @@ class _RepoTabState extends ConsumerState<RepoTab> {
     }
   }
 
+  Future<void> _toggleExtension(RepoExtension ext, bool enabled) async {
+    if (!_busyExtensionIds.add(ext.id)) return;
+    if (mounted) setState(() {});
+
+    var installedByThisAction = false;
+    try {
+      final extensionNotifier = ref.read(extensionProvider.notifier);
+      final installed = ref
+          .read(extensionProvider)
+          .extensions
+          .any((extension) => extension.id == ext.id);
+
+      if (enabled && !installed) {
+        final success = await ref
+            .read(repoProvider.notifier)
+            .installExtensionToDefaultPaths(ext.id);
+        if (!success) {
+          if (mounted) {
+            showAppSnackBar(
+              context,
+              content: Text(
+                context.l10n.snackbarFailedToInstallNamed(ext.displayName),
+              ),
+              behavior: SnackBarBehavior.floating,
+            );
+          }
+          return;
+        }
+        installedByThisAction = true;
+      }
+
+      await extensionNotifier.setExtensionEnabled(ext.id, enabled);
+      final updated = ref
+          .read(extensionProvider)
+          .extensions
+          .where((extension) => extension.id == ext.id)
+          .firstOrNull;
+      if (updated?.enabled != enabled && mounted) {
+        final error = ref.read(extensionProvider).error;
+        showAppSnackBar(
+          context,
+          content: Text(
+            error == null || error.isEmpty
+                ? context.l10n.storeLoadError
+                : context.friendlyError(error),
+          ),
+          behavior: SnackBarBehavior.floating,
+        );
+      } else if (installedByThisAction && mounted) {
+        showAppSnackBar(
+          context,
+          content: Text(
+            context.l10n.snackbarExtensionInstalled(ext.displayName),
+          ),
+          behavior: SnackBarBehavior.floating,
+        );
+      }
+    } finally {
+      _busyExtensionIds.remove(ext.id);
+      if (mounted) setState(() {});
+    }
+  }
+
   Future<void> _updateExtension(RepoExtension ext) async {
     final success = await ref
         .read(repoProvider.notifier)
@@ -903,18 +996,26 @@ class _RepoListSkeleton extends StatelessWidget {
 
 class _ExtensionItem extends StatelessWidget {
   final RepoExtension extension;
+  final bool isInstalled;
+  final bool isEnabled;
+  final bool showToggle;
   final bool showDivider;
   final bool isDownloading;
   final VoidCallback onInstall;
   final VoidCallback onUpdate;
+  final ValueChanged<bool> onToggle;
   final VoidCallback? onTap;
 
   const _ExtensionItem({
     required this.extension,
+    required this.isInstalled,
+    required this.isEnabled,
+    required this.showToggle,
     required this.showDivider,
     required this.isDownloading,
     required this.onInstall,
     required this.onUpdate,
+    required this.onToggle,
     this.onTap,
   });
 
@@ -948,10 +1049,10 @@ class _ExtensionItem extends StatelessWidget {
         fallbackIcon: context.isMornye
             ? mornyeIconFor(_getCategoryIcon(extension.category))
             : _getCategoryIcon(extension.category),
-        background: extension.isInstalled
+        background: isInstalled
             ? colorScheme.primaryContainer
             : colorScheme.surfaceContainerHighest,
-        foreground: extension.isInstalled
+        foreground: isInstalled
             ? colorScheme.onPrimaryContainer
             : colorScheme.onSurfaceVariant,
       ),
@@ -1012,6 +1113,25 @@ class _ExtensionItem extends StatelessWidget {
       trailingBelowWhenNarrow: true,
       trailing: isDownloading
           ? const AppLoadingIndicator(size: 24)
+          : showToggle
+          ? Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (extension.hasUpdate)
+                  IconButton(
+                    tooltip: context.l10n.storeUpdate,
+                    onPressed: onUpdate,
+                    icon: const Icon(Icons.system_update_alt),
+                  ),
+                AppSwitch(
+                  value: isEnabled,
+                  semanticLabel: extension.displayName,
+                  onChanged: extension.requiresNewerApp && !isInstalled
+                      ? null
+                      : onToggle,
+                ),
+              ],
+            )
           : !context.isMornye
           ? ExpressiveButton(
               onPressed: extension.hasUpdate
@@ -1085,3 +1205,4 @@ class _ExtensionItem extends StatelessWidget {
     );
   }
 }
+

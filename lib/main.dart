@@ -16,6 +16,7 @@ import 'package:mornye/models/settings.dart';
 import 'package:mornye/providers/download_queue_provider.dart';
 import 'package:mornye/providers/extension_provider.dart';
 import 'package:mornye/providers/local_library_provider.dart';
+import 'package:mornye/providers/repo_provider.dart';
 import 'package:mornye/providers/runtime_profile_provider.dart';
 import 'package:mornye/providers/settings_provider.dart';
 import 'package:mornye/providers/theme_provider.dart';
@@ -458,6 +459,9 @@ class _EagerInitializationState extends ConsumerState<EagerInitialization>
       }
       _initializeAppServices();
       _initializeExtensions();
+      if (isDesktopPlatform) {
+        unawaited(_initializeExtensionRepository());
+      }
       _initializeDeferredProviders();
     });
   }
@@ -707,6 +711,16 @@ class _EagerInitializationState extends ConsumerState<EagerInitialization>
     }
   }
 
+  Future<void> _initializeExtensionRepository() async {
+    try {
+      final cacheDir = await getApplicationCacheDirectory();
+      if (!mounted) return;
+      await ref.read(repoProvider.notifier).initialize(cacheDir.path);
+    } catch (e) {
+      _log.w('Could not preload the extension catalog: $e');
+    }
+  }
+
   Future<void> _consumeVerificationNotification() async {
     if (!mounted || !Platform.isAndroid) return;
     try {
@@ -733,3 +747,4 @@ class _EagerInitializationState extends ConsumerState<EagerInitialization>
     return widget.child;
   }
 }
+

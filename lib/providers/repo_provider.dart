@@ -7,10 +7,13 @@ import 'package:mornye/services/extension_storage_service.dart';
 import 'package:mornye/services/platform_bridge.dart';
 import 'package:mornye/utils/logger.dart';
 import 'package:mornye/providers/extension_provider.dart';
+import 'package:mornye/utils/desktop_platform.dart';
 
 final _log = AppLogger('StoreProvider');
 final RegExp _leadingVersionPrefix = RegExp(r'^v');
 const _registryUrlPrefKey = 'store_registry_url';
+const defaultExtensionRegistryUrl =
+    'https://raw.githubusercontent.com/mornyeapp/Mornye-Extension/main/registry.json';
 
 int _compareVersions(String v1, String v2) {
   final parts1 = v1.replaceAll(_leadingVersionPrefix, '').split('.');
@@ -224,7 +227,13 @@ class RepoNotifier extends Notifier<RepoState> {
 
   Future<void> _initialize(String cacheDir) async {
     final prefs = await SharedPreferences.getInstance();
-    final savedUrl = prefs.getString(_registryUrlPrefKey) ?? '';
+    final configuredUrl = prefs.getString(_registryUrlPrefKey);
+    final savedUrl =
+        configuredUrl ??
+        (isDesktopPlatform ? defaultExtensionRegistryUrl : '');
+    if (configuredUrl == null && savedUrl.isNotEmpty) {
+      await prefs.setString(_registryUrlPrefKey, savedUrl);
+    }
 
     state = state.copyWith(
       isLoading: true,
@@ -316,7 +325,9 @@ class RepoNotifier extends Notifier<RepoState> {
   Future<void> removeRegistryUrl() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.remove(_registryUrlPrefKey);
+      // Keep an explicit empty value so a removed default repository is not
+      // automatically restored the next time the app starts.
+      await prefs.setString(_registryUrlPrefKey, '');
 
       await PlatformBridge.clearRepoRegistryUrl();
 
@@ -460,3 +471,4 @@ class RepoNotifier extends Notifier<RepoState> {
 final repoProvider = NotifierProvider<RepoNotifier, RepoState>(
   RepoNotifier.new,
 );
+
