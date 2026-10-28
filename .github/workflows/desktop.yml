@@ -38,6 +38,7 @@ concurrency:
 jobs:
   build-macos:
     name: macOS app (universal)
+    if: github.event_name != 'workflow_dispatch'
     runs-on: macos-15
 
     steps:
@@ -147,6 +148,7 @@ jobs:
 
   build-linux:
     name: Linux bundle (${{ matrix.flutter_arch }})
+    if: github.event_name != 'workflow_dispatch'
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
@@ -379,3 +381,4 @@ jobs:
           name: desktop-windows-${{ matrix.arch }}
           if-no-files-found: error
           path: build/desktop/Mornye-windows-${{ matrix.arch }}.zip
+
