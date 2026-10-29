@@ -533,22 +533,6 @@ impl ExtensionManifest {
         source: Option<&ExtensionManifest>,
     ) -> Result<String, String> {
         let requested = requested.trim();
-        if self.name.eq_ignore_ascii_case("soundcloud")
-            && (requested.eq_ignore_ascii_case("SC_AAC_160_OUTPUT")
-                || requested.eq_ignore_ascii_case("FLAC")
-                || requested.eq_ignore_ascii_case("LOSSLESS"))
-        {
-            if let Some(exact) = self.find_quality(requested) {
-                return Ok(exact.id.trim().to_owned());
-            }
-            if let Some(option) = self
-                .find_quality("aac_160")
-                .or_else(|| self.quality_options.first())
-            {
-                return Ok(option.id.trim().to_owned());
-            }
-            return Ok(requested.to_owned());
-        }
         if self.quality_options.is_empty() {
             return Ok(requested.to_owned());
         }

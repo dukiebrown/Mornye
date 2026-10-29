@@ -114,7 +114,6 @@ class _DownloadRun {
   String? resultOutputExt;
   bool shouldPreserveNativeM4a = false;
   bool forceContainerConversion = false;
-  bool forceLossySoundCloudFlacOutput = false;
 
   /// Filled by the SAF embed op from the local temp so the final quality
   /// probe doesn't have to copy the published file back out of SAF.
@@ -653,9 +652,6 @@ class _DownloadRun {
 
     final actualService =
         result.service?.toLowerCase() ?? item.service.toLowerCase();
-    forceLossySoundCloudFlacOutput =
-        isSoundCloudFlacOutputQuality(item.service, quality) ||
-        isSoundCloudFlacOutputQuality(actualService, quality);
     resultOutputExt = result.outputExtension(path: filePath);
     final resultAudioFormat = normalizeAudioFormatValue(result.audioCodec);
     final resultIsKnownLossyAudio =
@@ -967,13 +963,6 @@ class _DownloadRun {
         (path.endsWith('.flac') ||
         resultOutputExt == '.flac' ||
         (mimeType != null && mimeType.contains('flac')));
-    final isOpusFile =
-        path.toLowerCase().endsWith('.opus') ||
-        path.toLowerCase().endsWith('.ogg') ||
-        resultOutputExt == '.opus' ||
-        resultOutputExt == '.ogg';
-    final isMp3File =
-        path.toLowerCase().endsWith('.mp3') || resultOutputExt == '.mp3';
     final shouldForceDashSafM4aHandling =
         !wasExisting &&
         isContentUriPath &&
@@ -1002,13 +991,6 @@ class _DownloadRun {
           await _convertLocalM4aToFlac(path);
         }
       }
-    } else if (forceLossySoundCloudFlacOutput &&
-        (isOpusFile || isMp3File)) {
-      if (isContentUriPath && effectiveSafMode) {
-        await _convertSafM4aToFlac(path);
-      } else {
-        await _convertLocalM4aToFlac(path);
-      }
     } else if (metadataEmbeddingEnabled &&
         isContentUriPath &&
         effectiveSafMode &&
@@ -1025,10 +1007,17 @@ class _DownloadRun {
         !isFlacFile &&
         !isM4aFile &&
         !wasExisting) {
-      if (isOpusFile || isMp3File) {
+      final isOpus =
+          path.toLowerCase().endsWith('.opus') ||
+          path.toLowerCase().endsWith('.ogg') ||
+          resultOutputExt == '.opus' ||
+          resultOutputExt == '.ogg';
+      final isMp3 =
+          path.toLowerCase().endsWith('.mp3') || resultOutputExt == '.mp3';
+      if (isOpus || isMp3) {
         await _embedFinalMetadata(
           path,
-          format: isOpusFile ? 'opus' : 'mp3',
+          format: isOpus ? 'opus' : 'mp3',
           writeExternalLrc: false,
         );
       }
@@ -1050,9 +1039,6 @@ class _DownloadRun {
     }
     result.markFlacContainer(path: path, name: name);
     resultOutputExt = '.flac';
-    if (forceLossySoundCloudFlacOutput) {
-      actualQuality = 'FLAC converted from SoundCloud audio';
-    }
   }
 
   Future<bool> _publishDeferredSafOutputOnce() async {
@@ -1240,7 +1226,6 @@ class _DownloadRun {
           final isAlreadyNativeFlac =
               codec == 'flac' && await FFmpegService.isNativeFlacFile(tempPath);
           final shouldAttemptConversion =
-              forceLossySoundCloudFlacOutput ||
               shouldAttemptLosslessContainerConversion(
                 forceConversion: forceContainerConversion,
                 probedCodec: codec,
@@ -1309,10 +1294,6 @@ class _DownloadRun {
         },
       );
 
-      if (newUri == null && forceLossySoundCloudFlacOutput) {
-        throw StateError('SoundCloud FLAC conversion could not be published');
-      }
-
       if (newUri != null) {
         filePath = newUri;
         finalSafFileName = producedFileName;
@@ -1325,7 +1306,6 @@ class _DownloadRun {
         _log.w('Failed to write FLAC to SAF, keeping M4A');
       }
     } catch (e) {
-      if (forceLossySoundCloudFlacOutput) rethrow;
       _log.w('SAF M4A->FLAC conversion failed: $e');
     }
   }
@@ -1374,9 +1354,6 @@ class _DownloadRun {
       final file = File(currentFilePath);
       if (!await file.exists()) {
         _log.e('File does not exist at path: $filePath');
-        if (forceLossySoundCloudFlacOutput) {
-          throw StateError('SoundCloud audio disappeared before FLAC conversion');
-        }
       } else {
         final length = await file.length();
         _log.i('File size before conversion: ${length / 1024} KB');
@@ -1385,9 +1362,6 @@ class _DownloadRun {
           _log.w(
             'File is too small (<1KB), skipping conversion. Download might be corrupt.',
           );
-          if (forceLossySoundCloudFlacOutput) {
-            throw StateError('SoundCloud audio is too small to convert to FLAC');
-          }
         } else {
           final codec = await FFmpegService.probePrimaryAudioCodec(
             currentFilePath,
@@ -1396,7 +1370,6 @@ class _DownloadRun {
               codec == 'flac' &&
               await FFmpegService.isNativeFlacFile(currentFilePath);
           final shouldAttemptConversion =
-              forceLossySoundCloudFlacOutput ||
               shouldAttemptLosslessContainerConversion(
                 forceConversion: forceContainerConversion,
                 probedCodec: codec,
@@ -1439,15 +1412,11 @@ class _DownloadRun {
               await _embedFinalMetadata(flacPath, format: 'flac');
             } else {
               _log.w('FFmpeg conversion returned null, keeping M4A file');
-              if (forceLossySoundCloudFlacOutput) {
-                throw StateError('SoundCloud FLAC conversion failed');
-              }
             }
           }
         }
       }
     } catch (e) {
-      if (forceLossySoundCloudFlacOutput) rethrow;
       _log.w('FFmpeg conversion process failed: $e, keeping M4A file');
     }
   }
