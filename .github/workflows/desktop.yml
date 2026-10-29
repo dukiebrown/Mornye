@@ -279,18 +279,11 @@ jobs:
 
   build-windows:
     name: Windows app (${{ matrix.arch }})
-    if: github.event_name != 'workflow_dispatch' || matrix.arch == 'x64'
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - arch: x64
-            runner: windows-2022
-            rust_target: x86_64-pc-windows-msvc
-          - arch: arm64
-            runner: windows-11-arm
-            rust_target: aarch64-pc-windows-msvc
+        include: ${{ github.event_name == 'workflow_dispatch' && fromJSON('[{"arch":"x64","runner":"windows-2022","rust_target":"x86_64-pc-windows-msvc"}]') || fromJSON('[{"arch":"x64","runner":"windows-2022","rust_target":"x86_64-pc-windows-msvc"},{"arch":"arm64","runner":"windows-11-arm","rust_target":"aarch64-pc-windows-msvc"}]') }}
     # Informational until the Windows build is proven in CI. Remove this once
     # a run of this job is green.
     continue-on-error: true
