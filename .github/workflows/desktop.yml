@@ -243,6 +243,7 @@ jobs:
       # linux/CMakeLists.txt installs the library and the FFmpeg tools staged
       # above into lib/ and lib/ffmpeg/.
       - name: Test desktop duplicate review and updater
+        if: github.event_name != 'workflow_dispatch'
         run: flutter test --reporter expanded test/duplicate_review_sheet_test.dart test/desktop_updater_test.dart test/settings_bottom_inset_test.dart test/semantics_geometry_regression_test.dart
 
       - name: Build Linux bundle
@@ -278,6 +279,7 @@ jobs:
 
   build-windows:
     name: Windows app (${{ matrix.arch }})
+    if: github.event_name != 'workflow_dispatch' || matrix.arch == 'x64'
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
@@ -321,6 +323,7 @@ jobs:
 
       # Runs the Windows-only extension sandbox and junction tests.
       - name: Test Rust core and extensions
+        if: github.event_name != 'workflow_dispatch'
         working-directory: rust_backend
         run: cargo test -p mornye-extensions -p mornye-core --target ${{ matrix.rust_target }}
 
@@ -360,6 +363,7 @@ jobs:
       # windows/CMakeLists.txt installs the library built above next to
       # mornye.exe and the FFmpeg tools staged above into ffmpeg\.
       - name: Test desktop duplicate review and updater
+        if: github.event_name != 'workflow_dispatch'
         run: flutter test --reporter expanded test/duplicate_review_sheet_test.dart test/desktop_updater_test.dart test/settings_bottom_inset_test.dart test/semantics_geometry_regression_test.dart
 
       - name: Build Windows app

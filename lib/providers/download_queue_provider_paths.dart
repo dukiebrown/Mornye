@@ -665,6 +665,9 @@ extension _DownloadQueuePaths on DownloadQueueNotifier {
   }
 
   String _determineOutputExt(String quality, String service) {
+    if (isSoundCloudFlacOutputQuality(service, quality)) {
+      return '.flac';
+    }
     final extensionPreferred = _extensionPreferredOutputExt(service);
     if (extensionPreferred != null) {
       return extensionPreferred;
@@ -772,7 +775,9 @@ extension _DownloadQueuePaths on DownloadQueueNotifier {
       'provider_id': providerTrackId,
       'playlist_position': playlistPosition,
       'playlistPosition': playlistPosition,
-      'quality': quality,
+      'quality': isSoundCloudFlacOutputQuality(provider, quality)
+          ? 'FLAC'
+          : quality,
       'quality_variant': qualityVariant,
     };
   }

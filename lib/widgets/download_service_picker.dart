@@ -9,6 +9,7 @@ import 'package:mornye/providers/settings_provider.dart';
 import 'package:mornye/l10n/l10n.dart';
 import 'package:mornye/theme/mornye_icons.dart';
 import 'package:mornye/theme/mornye_theme.dart';
+import 'package:mornye/utils/download_quality_options.dart';
 import 'package:mornye/utils/desktop_platform.dart';
 import 'package:mornye/widgets/app_bottom_sheet.dart';
 import 'package:mornye/widgets/mornye_chrome.dart';
@@ -129,7 +130,7 @@ class _DownloadServicePickerState extends ConsumerState<DownloadServicePicker> {
         .where((e) => e.id == _selectedService)
         .firstOrNull;
     if (ext != null && ext.qualityOptions.isNotEmpty) {
-      return ext.qualityOptions;
+      return downloadQualityOptionsFor(ext);
     }
 
     return const [];

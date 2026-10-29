@@ -7,6 +7,7 @@ import 'package:mornye/providers/settings_provider.dart';
 import 'package:mornye/providers/extension_provider.dart';
 import 'package:mornye/screens/settings/download_fallback_extensions_page.dart';
 import 'package:mornye/utils/audio_format_utils.dart';
+import 'package:mornye/utils/download_quality_options.dart';
 import 'package:mornye/utils/nav_bar_inset.dart';
 import 'package:mornye/widgets/app_bottom_sheet.dart';
 import 'package:mornye/widgets/settings_group.dart';
@@ -44,8 +45,9 @@ class _DownloadSettingsPageState extends ConsumerState<DownloadSettingsPage> {
               extension.id == selectedDownloadService,
         )
         .firstOrNull;
-    final qualityOptions =
-        selectedDownloadExtension?.qualityOptions ?? const <QualityOption>[];
+    final qualityOptions = selectedDownloadExtension == null
+        ? const <QualityOption>[]
+        : downloadQualityOptionsFor(selectedDownloadExtension);
     final canSelectQuality = qualityOptions.isNotEmpty;
     final nativeWorkerAvailable = Platform.isAndroid && hasDownloadExtensions;
 

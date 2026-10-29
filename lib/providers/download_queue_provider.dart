@@ -46,6 +46,7 @@ import 'package:mornye/utils/desktop_platform.dart';
 import 'package:mornye/utils/file_access.dart';
 import 'package:mornye/utils/string_utils.dart';
 import 'package:mornye/utils/audio_format_utils.dart';
+import 'package:mornye/utils/download_quality_options.dart';
 import 'package:mornye/utils/int_utils.dart';
 import 'package:mornye/utils/path_match_keys.dart';
 import 'package:mornye/utils/extension_auth_launcher.dart';
